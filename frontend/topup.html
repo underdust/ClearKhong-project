@@ -1,0 +1,16 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>เติมโทเคน</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="row"><a href="home.html">Home</a><button id="logout" class="btn-secondary">ออกจากระบบ</button></div></div>
+<div class="container">
+  <div class="card" style="max-width:500px;margin:0 auto">
+    <h2>เติมโทเคน</h2>
+    <div id="buttons"></div>
+  </div>
+</div>
+<script type="module">
+import {logout} from './js/common.js'; document.getElementById('logout').onclick=logout;
+const pkgs=[5,10,20,50,100,500]; const box=document.getElementById('buttons');
+box.innerHTML = pkgs.map(n=>`<button class="pkg" data-n="${n}" style="width:100%;margin:6px 0">${n} tokens</button>`).join('');
+document.addEventListener('click',(e)=>{ if(e.target.classList.contains('pkg')){ const n=e.target.dataset.n; location.href='payment.html?type=topup&amount='+n; } });
+</script>
+</body></html>

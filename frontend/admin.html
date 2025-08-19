@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="nav">
+    <div class="brand"><i>◉</i>ClearKhong Admin</div>
+    <div class="spacer"></div>
+    <a href="index.html">Home</a>
+    <span class="spacer"></span>
+    <button id="logout" class="btn-secondary">ออกจากระบบ</button>
+  </div>
+
+  <div class="container">
+    <div class="grid-posts">
+      <div class="card">
+        <h3>โพสต์รออนุมัติ</h3>
+        <div id="pending"></div>
+      </div>
+
+      <div class="card">
+        <h3>ผู้ใช้ทั้งหมด</h3>
+        <div id="users"></div>
+      </div>
+
+      <div class="card">
+        <h3>โพสต์ทั้งหมด</h3>
+        <div id="allposts"></div>
+      </div>
+
+      <div class="card">
+        <h3>รีพอร์ตผู้ใช้</h3>
+        <div id="reports"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+  import { api, toast, logout, API } from './js/common.js';
+  document.getElementById('logout').onclick = logout;
+
+  function row(html){ return '<div class=\"row\" style=\"margin:6px 0\">' + html + '</div>'; }
+
+  function esc(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function load(){
+    try{
+      const results = await Promise.all([
+        api('/api/admin/pending'),
+        api('/api/admin/users'),
+        api('/api/admin/posts'),
+        api('/api/admin/reports')
+      ]);
+      const pending = results[0] || [];
+      const users = results[1] || [];
+      const posts = results[2] || [];
+      const reports = results[3] || [];
+
+      // Pending posts
+      var pHtml = '';
+      for(var i=0;i<pending.length;i++){
+        var p = pending[i];
+        pHtml += row(
+          '<a class=\"spacer\" href=\"post.html?id=' + p.id + '\"><b>' + esc(p.title) + '</b></a>' +
+          '<button class=\"btn-secondary approve\" data-id=\"' + p.id + '\">อนุมัติ</button>' +
+          '<button class=\"btn-secondary reject\" data-id=\"' + p.id + '\">ปฏิเสธ</button>'
+        );
+      }
+      if(!pHtml) pHtml = '<div style=\"opacity:.7\">ไม่มีรายการ</div>';
+      document.getElementById('pending').innerHTML = pHtml;
+
+      // Users
+      var uHtml = '';
+      for(var j=0;j<users.length;j++){
+        var u = users[j];
+        var actions = '';
+        if(u.role !== 'admin'){
+          actions = u.is_active
+            ? '<button class=\"btn-secondary suspend\" data-id=\"' + u.id + '\">ระงับ</button>'
+            : '<button class=\"btn-secondary activate\" data-id=\"' + u.id + '\">ปลดระงับ</button>';
+        }
+        uHtml += row(
+          '<a class=\"spacer\" href=\"profile.html?user=' + u.id + '\"><b>' + esc(u.username) + '</b></a> (' + esc(u.role) + ') ' + actions
+        );
+      }
+      if(!uHtml) uHtml = '<div style=\"opacity:.7\">ไม่มีรายการ</div>';
+      document.getElementById('users').innerHTML = uHtml;
+
+      // All posts
+      var aHtml = '';
+      for(var k=0;k<posts.length;k++){
+        var pp = posts[k];
+        aHtml += row(
+          '<a class=\"spacer\" href=\"post.html?id=' + pp.id + '\"><b>' + esc(pp.title) + '</b></a> — ' +
+          '<span class=\"badge\">' + esc(pp.status) + '</span> โดย <b>' + esc(pp.username) + '</b>'
+        );
+      }
+      if(!aHtml) aHtml = '<div style=\"opacity:.7\">ไม่มีรายการ</div>';
+      document.getElementById('allposts').innerHTML = aHtml;
+
+      // Reports
+      var rHtml = '';
+      for(var m=0;m<reports.length;m++){
+        var r = reports[m];
+        var when = new Date(r.created_at).toLocaleString();
+        rHtml += row(
+          '<a class=\"spacer open-report\" href=\"#\" data-id=\"' + r.id + '\">#' + r.id + ' — ' + esc(r.reasons || '-') +
+          ' โดย <b>' + esc(r.reporter) + '</b> → <b>' + esc(r.target) + '</b> ' +
+          '<span style=\"opacity:.7\">' + when + '</span></a>' +
+          '<span class=\"badge\">' + esc(r.status) + '</span>'
+        );
+      }
+      if(!rHtml) rHtml = '<div style=\"opacity:.7\">ไม่มีรีพอร์ต</div>';
+      document.getElementById('reports').innerHTML = rHtml;
+
+    }catch(e){
+      toast(e,'err');
+    }
+  }
+
+  function makeOverlay(contentHtml){
+    var wrap = document.createElement('div');
+    wrap.style.position = 'fixed';
+    wrap.style.inset = '0';
+    wrap.style.background = 'rgba(0,0,0,.6)';
+    wrap.style.display = 'flex';
+    wrap.style.alignItems = 'center';
+    wrap.style.justifyContent = 'center';
+    wrap.style.zIndex = '9999';
+    wrap.innerHTML = '<div style=\"max-width:820px;width:92%;background:#0f172a;border:1px solid #334155;border-radius:16px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.6)\">' + contentHtml + '</div>';
+    wrap.addEventListener('click', function(ev){ if(ev.target===wrap) wrap.remove(); });
+    document.body.appendChild(wrap);
+    return wrap;
+  }
+
+  document.addEventListener('click', async function(e){
+    try{
+      var id = e.target.dataset.id || '';
+
+      if(e.target.classList.contains('approve')){
+        await api('/api/admin/posts/' + id + '/approve', { method: 'POST' });
+        toast('อนุมัติแล้ว'); load(); return;
+      }
+      if(e.target.classList.contains('reject')){
+        await api('/api/admin/posts/' + id + '/reject', { method: 'POST' });
+        toast('ปฏิเสธแล้ว'); load(); return;
+      }
+      if(e.target.classList.contains('suspend')){
+        await api('/api/admin/users/' + id + '/suspend', { method: 'POST' });
+        toast('ระงับผู้ใช้แล้ว'); load(); return;
+      }
+      if(e.target.classList.contains('activate')){
+        await api('/api/admin/users/' + id + '/activate', { method: 'POST' });
+        toast('ปลดระงับแล้ว'); load(); return;
+      }
+
+      if(e.target.classList.contains('open-report')){
+        e.preventDefault();
+        var rid = e.target.dataset.id;
+        var r = await api('/api/admin/reports/' + rid);
+
+        // images: support json/array/CSV
+        function toUrls(arr){ var out=[]; for(var i=0;i<arr.length;i++){ out.push(API + '/uploads/reports/' + arr[i]); } return out; }
+        var imgs = [];
+        if (Array.isArray(r.images)) { imgs = toUrls(r.images); }
+        else {
+          try {
+            var parsed = JSON.parse(r.images);
+            if (Array.isArray(parsed)) imgs = toUrls(parsed);
+          } catch (_) {
+            var csv = String(r.images || '').split(',');
+            var clean = [];
+            for(var c=0;c<csv.length;c++){ var s = csv[c].trim(); if(s) clean.push(s); }
+            imgs = toUrls(clean);
+          }
+        }
+        var imgHtml = '';
+        if(imgs.length){
+          imgHtml = '<div class=\"row\" style=\"gap:8px;flex-wrap:wrap;margin-top:8px\">';
+          for(var im=0; im<imgs.length; im++){
+            var u = imgs[im];
+            imgHtml += '<img src=\"' + u + '\" style=\"width:120px;height:120px;object-fit:cover;border-radius:8px;border:1px solid #333\">';
+          }
+          imgHtml += '</div>';
+        }else{
+          imgHtml = '<div style=\"opacity:.7\">ไม่มีรูปหลักฐาน</div>';
+        }
+
+        var html = ''
+          + '<div class=\"card\">'
+          +   '<h3 style=\"margin-top:0\">Report #' + r.id + '</h3>'
+          +   '<div>จาก: <b>' + esc(r.reporter) + '</b> → ผู้ถูกรายงาน: <b>' + esc(r.target) + '</b></div>'
+          +   '<div style=\"margin-top:6px\"><b>ประเภท:</b> ' + esc(r.type || 'user') + '</div>'
+          +   '<div style=\"margin-top:6px\"><b>หัวข้อ:</b> ' + esc(r.reasons || '-') + '</div>'
+          +   '<div style=\"margin-top:6px\"><b>รายละเอียด:</b><br>' + esc(r.details || '-').replace(/\n/g,'<br>') + '</div>'
+          +   '<div style=\"margin-top:6px\"><b>รูปหลักฐาน</b></div>'
+          +   imgHtml
+          +   '<div class=\"row\" style=\"margin-top:12px\">'
+          +     '<span class=\"spacer\"></span>'
+          +     '<select id=\"repStatus\">'
+          +       '<option value=\"open\"' + (r.status==='open'?' selected':'') + '>open</option>'
+          +       '<option value=\"reviewing\"' + (r.status==='reviewing'?' selected':'') + '>reviewing</option>'
+          +       '<option value=\"resolved\"' + (r.status==='resolved'?' selected':'') + '>resolved</option>'
+          +     '</select>'
+          +     '<button id=\"saveStatus\" data-id=\"' + r.id + '\">บันทึกสถานะ</button>'
+          +   '</div>'
+          + '</div>';
+
+        var wrap = makeOverlay(html);
+
+        document.getElementById('saveStatus').onclick = async function(ev){
+          var rid2 = ev.target.dataset.id;
+          var status = document.getElementById('repStatus').value;
+          await api('/api/admin/reports/' + rid2 + '/status', {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify({ status: status })
+          });
+          toast('บันทึกแล้ว');
+          wrap.remove(); load();
+        };
+      }
+    }catch(err){ toast(err,'err'); }
+  });
+
+  load();
+  </script>
+</body>
+</html>

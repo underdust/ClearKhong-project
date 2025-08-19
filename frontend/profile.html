@@ -1,0 +1,295 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8"><title>โปรไฟล์</title><link rel="stylesheet" href="style.css">
+</head><body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="row"><a href="notifications.html">🔔</a><a href="home.html">Home</a><button id="logout" class="btn-secondary">ออกจากระบบ</button></div></div>
+<div class="container">
+  <div class="card" id="box"></div>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <h3 style="margin:0">Pending</h3>
+      <span class="spacer"></span>
+    </div>
+    <div id="pendingBox"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <h3 style="margin:0">History</h3>
+      <span class="spacer"></span>
+      <select id="filter">
+        <option value="all">ทั้งหมด</option>
+        <option value="myposts">โพสต์ของฉัน</option>
+        <option value="buys">การซื้อ</option>
+        <option value="trades">การเทรด</option>
+      </select>
+    </div>
+    <div id="history"></div>
+  </div>
+</div>
+<script type="module">
+import {api,toast,qs,bust,API,logout} from './js/common.js';
+document.getElementById('logout').onclick=logout;
+const box=qs('#box'), hbox=qs('#history');
+const params=new URL(location.href).searchParams;
+const viewId = params.get('id') || params.get('user');
+let me=null; let viewingOther=false; let current=null;
+function viewImage(url){ return (url ? (API + url) : 'https://www.pngall.com/wp-content/uploads/5/Profile-PNG-File.png'); }
+async function load(){
+  me = await api('/api/profile/me').catch(()=>null);
+  if(!me){ window.__guest = true; /* อยู่ในโหมด Guest: แสดงเฉพาะข้อมูลอ่านอย่างเดียว */ }
+  
+  if(viewId && (!me || me.role!=='admin')){
+    viewingOther = true;
+    try{
+      const r = await api('/api/profile/public/'+viewId);
+      current = r.user;
+      // Render readonly profile (no edit, no tokens controls)
+      renderPublicProfile(r.user, r.recentPosts||[]);
+    }catch(e){
+      // fallback: show not found
+      current = { username: 'ไม่พบผู้ใช้', profile_image_url: '' };
+      renderPublicProfile(current, []);
+    }
+    return;
+  }
+
+if(viewId && me.role==='admin'){
+    viewingOther = true;
+    current = await api('/api/admin/users/'+viewId);
+    try{
+      const hist = await api('/api/admin/users/'+viewId+'/history');
+      renderProfile(false);
+  renderHistory(hist);
+  renderPending(hist.myPosts);
+    }catch(e){
+      renderProfile(false);
+  renderHistory(hist);
+  renderPending(hist.myPosts);
+    }
+  }else{
+    current = await api('/api/profile/me');
+    const hist = await api('/api/profile/history');
+    renderProfile(false);
+  renderHistory(hist);
+  renderPending(hist.myPosts);
+  }
+}
+
+function renderPublicProfile(user, recentPosts){
+  const img = viewImage(user.profile_image_url);
+  box.innerHTML = `<div class="row">
+    <img class="avatar" src="${bust(img)}">
+    <div style="min-width:260px">
+      <div style="font-size:20px"><b>${user.username}</b></div>
+      <div>ร้าน: ${user.shop_name || '-'}</div>
+      <div>เบอร์: ${user.phone || '-'}</div>
+      <div>อีเมล: ${user.email || '-'}</div>
+      <div>Bio: ${user.bio || '-'}</div>
+    </div>
+    <span class="spacer"></span>
+    <span class="badge">Public</span>
+    <a class="btn-secondary" style="margin-left:10px" href="report.html?target=${user.id}">รายงานผู้ใช้นี้</a>
+  </div>
+  <div style="margin-top:10px">
+    <h3 style="margin:0 0 8px 0">โพสต์ล่าสุด</h3>
+    <div id="recentBox"></div>
+  </div>`;
+
+  const rBox = document.getElementById('recentBox');
+  if(!recentPosts || !recentPosts.length){
+    rBox.innerHTML = '<div style="opacity:.7">ยังไม่มีโพสต์</div>';
+  }else{
+    rBox.innerHTML = recentPosts.map(p => (
+      `<div class="post-row">
+        <a href="post.html?id=${p.id}"><b>${p.title||'(ไม่มีชื่อ)'}</b></a>
+        <span class="badge ${p.status==='approved'?'ok':(p.status==='pending'?'warn':'err')}">${p.status}</span>
+        <span style="opacity:.6;margin-left:8px">${new Date(p.created_at).toLocaleString()}</span>
+      </div>`
+    )).join('');
+  }
+}
+
+function renderProfile(editing){
+  
+  const img=viewImage(current.profile_image_url);
+  box.innerHTML=`<div class="row">
+    <img id="avatar" class="avatar" src="${bust(img)}" title="คลิกเพื่ออัปโหลดรูป">
+    <input id="file" type="file" accept="image/*" style="display:none">
+    <div style="min-width:260px">
+      <div style="font-size:20px"><b>${current.username}</b></div>
+      <div>Tokens: <b id="bal">${current.tokens}</b> <button id="add" class="btn-secondary">＋</button></div>
+      <div>ร้าน: ${editing?`<input id="shopName" value="${current.shop_name||''}" style="width:100%">`:(current.shop_name||'-')}</div>
+      <div>เบอร์: ${editing?`<input id="phone" value="${current.phone||''}" style="width:100%">`:(current.phone||'-')}</div>
+      <div>อีเมล: ${editing?`<input id="email" value="${current.email||''}" style="width:100%">`:(current.email||'-')}</div>
+      <div>ที่อยู่: ${editing?`<input id="address" value="${current.address||''}" style="width:100%">`:(current.address||'-')}</div>
+      <div>Bio: ${editing?`<textarea id="bio" style="width:100%;height:70px">${current.bio||''}</textarea>`:(current.bio||'-')}</div>
+    </div>
+    <span class="spacer"></span>
+    ${editing?`<button id="cancel" class="btn-secondary">ยกเลิก</button><button id="save">บันทึก</button>`:`<button id="edit" class="btn-secondary">แก้ไข</button>`}
+  </div>`;
+  const avatar=qs('#avatar'); const file=qs('#file'); avatar.onclick=()=>file.click();
+  file.onchange=async (e)=>{ const f=e.target.files?.[0]; 
+  if(!f) return; avatar.src=URL.createObjectURL(f);
+  const fd=new FormData(); fd.append('profileImage',f);
+    try{ const r=await api(viewId?('/api/admin/users/'+viewId):'/api/profile/me',{method:'PUT',body:fd}); current=r;
+    avatar.src=bust(viewImage(r.profile_image_url)); 
+    toast('อัปโหลดรูปแล้ว','ok'); 
+  } catch(err){ toast(err,'err'); avatar.src=bust(img); } };
+  const editBtn=qs('#edit'), saveBtn=qs('#save'), cancelBtn=qs('#cancel'); 
+  if(editBtn) 
+  editBtn.onclick=()=>renderProfile(true);
+  if(saveBtn) saveBtn.onclick=async ()=>{
+  const email = qs('#email')?.value?.trim() || '';
+  const phone = qs('#phone')?.value?.trim() || '';
+  if(email && !email.includes('@')) { toast('อีเมลไม่ถูกต้อง ต้องมี @','err'); return; }
+  if(phone && !/^\d{10}$/.test(phone)) { toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก','err'); return; }
+  const fd = new FormData();
+  const pf = qs('#file')?.files?.[0];
+  if(pf) fd.append('profileImage', pf);
+  const sn = qs('#shopName')?.value?.trim() || '';
+  fd.append('shopName', sn);
+  fd.append('phone', phone);
+  fd.append('email', email);
+  const address = (qs('#address')?.value?.trim() || '');
+  const bio = (qs('#bio')?.value?.trim() || '');
+  fd.append('address', address);
+  fd.append('bio', bio);
+  const target = (viewId?('/api/admin/users/'+viewId):'/api/profile/me');
+  try{
+    const r = await api(target, { method:'PUT', body: fd });
+    current = r;
+    toast('บันทึกแล้ว','ok');
+    renderProfile(false);
+  }catch(err){ toast(err,'err'); }
+};
+if(cancelBtn) cancelBtn.onclick=()=>renderProfile(false);
+  qs('#add').onclick=()=>location.href='topup.html';
+}
+
+function renderPending(allMyPosts){
+  const box = document.getElementById('pendingBox');
+  if(!box) return;
+  const rows = (allMyPosts||[]).filter(p=>p.status==='pending' || p.status==='rejected' || p.status==='waiting');
+  if(!rows.length){ box.innerHTML='<div style="opacity:.7">ไม่มีรายการค้างดำเนินการ</div>'; return; }
+  box.innerHTML = rows.map(p=>{
+    const actions = p.status==='waiting' 
+      ? `<button class="mini primary" data-act="publish" data-id="${p.id}">โพสต์เลย (หัก 10)</button> <button class="mini" data-act="del" data-id="${p.id}">ลบ</button>`
+      : (p.status==='pending' 
+          ? `<button class="mini" data-act="del" data-id="${p.id}">ลบ</button>`
+          : `<button class="mini" data-act="edit" data-id="${p.id}">แก้ไข</button> <button class="mini" data-act="resubmit" data-id="${p.id}">ส่งอนุมัติใหม่</button> <button class="mini" data-act="del" data-id="${p.id}">ลบ</button>`);
+    const cls = p.status==='rejected'?'err':(p.status==='waiting'?'warn':'ok');
+    return `<div class="row" style="margin:6px 0">
+      <a class="spacer" href="post.html?id=${p.id}"><b>${p.title}</b></a>
+      <span class="badge ${cls}">${p.status}</span> ${actions}
+    </div>`;
+  }).join('');
+}
+document.addEventListener('click', async (e)=>{
+  const act = e.target?.dataset?.act;
+  if(!act) return;
+  const id = e.target.dataset.id;
+  if(act==='publish'){
+    try{ const r=await api('/api/posts/'+id+'/publish',{method:'POST'}); toast('เผยแพร่แล้ว','ok'); location.reload(); }catch(err){ toast(err,'err'); }
+  }else if(act==='del'){
+    if(!confirm('ยืนยันลบโพสต์นี้?')) return;
+    try{ await api('/api/posts/'+id,{method:'DELETE'}); toast('ลบแล้ว','ok'); location.reload(); }catch(err){ toast(err,'err'); }
+  }else if(act==='resubmit'){
+    try{ await api('/api/posts/'+id+'/resubmit',{method:'POST'}); toast('ส่งตรวจใหม่แล้ว','ok'); location.reload(); }catch(err){ toast(err,'err'); }
+  }else if(act==='edit'){
+    // เปิดหน้าง่ายๆไปที่ post.html เพื่อแก้ (ถ้ามีหน้าแก้ต่างหากค่อยเปลี่ยน) — ที่นี่ขอเด้งไปหน้าสร้างพร้อมพารามิเตอร์ในอนาคต
+    location.href='edit.html?id='+id;
+  }
+});
+
+function renderHistory(hist){
+  const t=document.getElementById('filter').value; let rows=[]; if(t==='all') rows=[...hist.myPosts,...hist.myBuys]; if(t==='myposts') rows=hist.myPosts; if(t==='buys') rows=hist.myBuys; if(t==='trades') rows=hist.myTrades; if(t==='all') rows=[...(hist.myPosts||[]),...(hist.myBuys||[]),...(hist.myTrades||[])]; if(t==='trades') rows=hist.myTrades;
+  hbox.innerHTML = rows.map(r=>{ if(r.title){ const cls=r.status==='closed'?'ok':(r.status==='pending'?'warn':(r.status==='rejected'?'err':''));
+    return `<div class="row" style="margin:6px 0"><a class="spacer" href="post.html?id=${r.post_id||r.id}"><b>${r.title}</b></a><span class="badge ${cls}">${r.status}</span></div>`; }
+    return `<div class="row" style="margin:6px 0">ซื้อโพสต์ #${r.post_id} <span class="spacer"></span> <span class="badge ok">${r.status}</span></div>`; }).join('');
+}
+document.getElementById('filter').onchange=()=>load();
+load();
+</script>
+
+<script type="module">
+import { api, qs, qsa, toast } from './js/common.js';
+
+async function setupGuestUI(){
+  let me = await api('/api/profile/me').catch(()=>null);
+  if(!me){
+    // Nav: change "ออกจากระบบ" -> "เข้าสู่ระบบ"
+    const logoutBtn = document.getElementById('logout');
+    if(logoutBtn){
+      logoutBtn.textContent = 'เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick = ()=> location.href='login.html';
+    }
+    const adminLink = document.getElementById('adminLink');
+    if(adminLink) adminLink.style.display='none';
+    const bal = document.getElementById('balNav');
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+
+    // Profile page restrictions
+    // Hide or disable editing elements
+    ['edit','save','cancel','file'].forEach(id=>{ const el=qs('#'+id); if(el){ el.style.display='none'; el.disabled=true; }});
+    qsa('button').forEach(btn=>{
+      if(btn && /แก้ไข|บันทึก|อัปโหลด|save|edit|upload/i.test(btn.textContent||'')){
+        btn.disabled = true;
+        btn.style.opacity = .6;
+        btn.onclick = (e)=>{ e.preventDefault(); toast('กรุณา login','err'); };
+      }
+    });
+  }
+}
+setupGuestUI();
+</script>
+
+
+<script type="module">
+import { api, qs, qsa, toast } from './js/common.js';
+
+async function setupGuestUI(){
+  let me = await api('/api/profile/me').catch(()=>null);
+  if(!me){
+    // Nav: change "ออกจากระบบ" -> "เข้าสู่ระบบ"
+    const logoutBtn = document.getElementById('logout');
+    if(logoutBtn){
+      logoutBtn.textContent = 'เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick = ()=> location.href='login.html';
+    }
+    const adminLink = document.getElementById('adminLink');
+    if(adminLink) adminLink.style.display='none';
+    const bal = document.getElementById('balNav');
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+
+    // Render a simple read-only Guest profile so the page isn't empty
+    const box = qs('#box');
+    if(box){
+      box.innerHTML = `
+        <div class="row">
+          <img id="avatar" src="https://www.pngall.com/wp-content/uploads/5/Profile-PNG-File.png" alt="Guest" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-right:12px">
+          <div>
+            <h3 style="margin:0">Guest</h3>
+            <div class="muted">ยังไม่ได้เข้าสู่ระบบ</div>
+          </div>
+          <span class="spacer"></span>
+          <button class="btn-primary" onclick="location.href='login.html'">เข้าสู่ระบบ</button>
+        </div>
+      `;
+    }
+
+    // Profile page restrictions
+    ['edit','save','cancel','file'].forEach(id=>{ const el=qs('#'+id); if(el){ el.style.display='none'; el.disabled=true; }});
+    qsa('button').forEach(btn=>{
+      if(btn && /แก้ไข|บันทึก|อัปโหลด|save|edit|upload/i.test(btn.textContent||'')){
+        btn.disabled = true;
+        btn.style.opacity = .6;
+        btn.onclick = (e)=>{ e.preventDefault(); toast('กรุณา login','err'); };
+      }
+    });
+  }
+}
+setupGuestUI();
+</script>
+
+</body></html>

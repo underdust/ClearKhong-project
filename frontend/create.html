@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>สร้างโพสต์</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="row"><button id="logout" class="btn-secondary">ออกจากระบบ</button></div></div>
+<div class="container">
+  <div class="card" style="max-width:800px;margin:0 auto">
+    <h2>สร้างโพสต์ใหม่</h2>
+    <form id="postForm">
+      <label>ชื่อสินค้า</label><br><input name="title" style="width:100%" required><br><br>
+      <label>รายละเอียด</label><br><textarea name="description" rows="4" style="width:100%" required></textarea><br><br>
+      <label><input type="checkbox" name="is_sell"> ขาย</label>
+      <label><input type="checkbox" name="is_trade"> เทรด</label><br><br>
+      <label>ราคา (ถ้าขาย)</label><br><input name="price" type="number" step="0.01"><br><br>
+      <label>รูปภาพ</label><br><input name="images" type="file" accept="image/*" multiple><br><br>
+      <div class="card">
+        <b>แท็ก</b><br>
+        <label><input type="checkbox" name="tags" value="electronics"> electronics</label>
+        <label><input type="checkbox" name="tags" value="fashion"> fashion</label>
+        <label><input type="checkbox" name="tags" value="home"> home</label>
+        <label><input type="checkbox" name="tags" value="books"> books</label>
+        <label><input type="checkbox" name="tags" value="toys"> toys</label>
+        <label><input type="checkbox" name="tags" value="sports"> sports</label>
+        <label><input type="checkbox" name="tags" value="collectibles"> collectibles</label>
+      </div><br>
+      <button>ส่งตรวจอนุมัติ</button>
+    </form>
+  </div>
+</div>
+<script type="module">
+import {api,toast,logout} from './js/common.js'; 
+document.getElementById('logout').onclick=logout;
+const f=document.getElementById('postForm');
+f.onsubmit=async (e)=>{
+ e.preventDefault();
+ const fd=new FormData(f);
+ try{ await api('/api/posts',{method:'POST',body:fd}); 
+ toast('ส่งตรวจอนุมัติแล้ว','ok'); 
+ location.href='home.html'; }
+ catch(err){ toast(err,'err'); }
+};
+</script>
+
+<script type="module">
+import { api, toast } from './js/common.js';
+(async () => {
+  const me = await api('/api/profile/me').catch(()=>null);
+  const logoutBtn = document.getElementById('logout');
+  const adminLink = document.getElementById('adminLink');
+  const bal = document.getElementById('balNav');
+  if(!me){
+    if(adminLink) adminLink.style.display='none';
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+    if(logoutBtn){
+      logoutBtn.textContent='เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick=()=>location.href='login.html';
+    }
+    
+    // Disable form interactions
+    const form = document.querySelector('form');
+    if(form){
+      form.querySelectorAll('input,textarea,button,select').forEach(el=>{ el.disabled=true; el.style.opacity=.6; });
+      const msg=document.createElement('div');
+      msg.className='card';
+      msg.style.marginTop='10px';
+      msg.innerHTML='<b>ต้องเข้าสู่ระบบก่อน</b><div class="muted">กรุณา login เพื่อใช้งานหน้านี้</div><button style="margin-top:8px" onclick="location.href=\'login.html\'">เข้าสู่ระบบ</button>';
+      form.parentNode.insertBefore(msg, form);
+    }
+        
+  }
+})();
+</script>
+
+</body></html>

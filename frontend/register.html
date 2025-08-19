@@ -1,0 +1,30 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>Register</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div></div>
+<div class="container">
+  <div class="card" style="max-width:540px;margin:30px auto">
+    <h2>สมัครสมาชิก</h2>
+    <form id="regForm">
+      <input name="username" placeholder="ชื่อผู้ใช้" required style="width:100%;margin:8px 0">
+      <input name="password" placeholder="รหัสผ่าน" type="password" required style="width:100%;margin:8px 0">
+      <input name="shopName" placeholder="ชื่อร้าน (ถ้ามี)" style="width:100%;margin:8px 0">
+      <input name="phone" placeholder="เบอร์โทร" style="width:100%;margin:8px 0">
+      <input name="email" placeholder="อีเมล" style="width:100%;margin:8px 0">
+      <button style="width:100%;margin-top:8px">สมัครสมาชิก</button>
+    </form>
+  </div>
+</div>
+<script type="module">
+import {api,toast} from './js/common.js';
+const f=document.getElementById('regForm');
+f.onsubmit=async (e)=>{
+ e.preventDefault();
+ const body=Object.fromEntries(new FormData(f));
+ const phone=String(body.phone||'').trim(); const email=String(body.email||'').trim();
+ if(email && !email.includes('@')){ toast('อีเมลไม่ถูกต้อง ต้องมี @','err'); return; }
+ if(phone && !/^\d{10}$/.test(phone)){ toast('เบอร์โทรต้องเป็นตัวเลข 10 หลัก','err'); return; }
+ try{ await api('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); toast('สมัครสำเร็จ','ok'); location.href='home.html'; }
+ catch(err){ toast(err,'err'); }
+};
+</script>
+</body></html>

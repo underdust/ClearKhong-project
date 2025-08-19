@@ -1,0 +1,91 @@
+services:
+  db:
+    image: postgres:17
+    container_name: clearkhong_db_v4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "Taifoon_114160"
+      POSTGRES_DB: clearkhong
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d clearkhong"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clearkhong_backend_v4
+    environment:
+      PORT: "4000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: "Taifoon_114160"
+      DB_NAME: clearkhong
+      ORIGIN: "http://127.0.0.1:8080"
+    volumes:
+      - uploads-data:/app/uploads
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["node", "server.js"]
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: clearkhong_frontend_v4
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  db-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clearkhong_db_init_v4
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: "Taifoon_114160"
+      DB_NAME: clearkhong
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./database:/app/database:ro
+      - ./database:/database:ro
+    command: ["npm", "run", "init:db"]
+
+  db-seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: clearkhong_db_seed_v4
+    environment:
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASS: "Taifoon_114160"
+      DB_NAME: clearkhong
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./database:/app/database:ro
+      - ./database:/database:ro
+    command: ["npm", "run", "seed:db"]
+
+volumes:
+  pgdata:
+  uploads-data:

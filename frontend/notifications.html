@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="utf-8"><title>Notifications</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="row"><a href="home.html">Home</a><button id="logout" class="btn-secondary">ออกจากระบบ</button></div></div>
+<div class="container"><div class="card"><h2>การแจ้งเตือน</h2><div id="list"></div></div></div>
+<script type="module">
+import {api,logout} from './js/common.js'; 
+document.getElementById('logout').onclick=logout;
+async function load(){ const rows=await api('/api/notifs'); 
+document.getElementById('list').innerHTML = rows.map(n=>`
+  <div class="row" style="margin:6px 0">
+    <div class="spacer">${n.message} <span style="opacity:.7">(${new Date(n.created_at).toLocaleString()})</span></div>
+    ${n.read?'<span class="badge ok">อ่านแล้ว</span>':`<button data-id="${n.id}" class="read btn-secondary">อ่านแล้ว</button>`}
+  </div>`).join('') || '<div style="opacity:.7">ไม่มีการแจ้งเตือน</div>'; }
+document.addEventListener('click', async (e)=>{ if(e.target.classList.contains('read')){ await api('/api/notifs/'+e.target.dataset.id+'/read',{method:'POST'}); load(); } });
+load();
+</script>
+</body></html>

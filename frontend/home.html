@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8"><title>Home</title><link rel="stylesheet" href="style.css">
+</head><body>
+<div class="nav">
+  <div class="brand"><i>◉</i>ClearKhong</div>
+  <div class="row">
+    <span id="balNav" class="badge" style="margin-right:6px;cursor:pointer" title="กดเพื่อเติมโทเคน">0 tk</span>
+    <a href="notifications.html" title="การแจ้งเตือน">🔔</a>
+    <a id="adminLink" href="admin.html" style="display:none">Admin</a>
+    <a href="profile.html">โปรไฟล์</a>
+    <button id="logout" class="btn-secondary">ออกจากระบบ</button>
+  </div>
+</div>
+<div class="container">
+  <div class="card row">
+    <input id="q" placeholder="ค้นหาชื่อสินค้า..." style="flex:1 1 auto">
+    <select id="tag">
+      <option value="">ทุกแท็ก</option><option>electronics</option><option>fashion</option>
+      <option>home</option><option>books</option><option>toys</option><option>sports</option><option>collectibles</option>
+    </select>
+    <button id="search">ค้นหา</button>
+  </div>
+  <div id="list" class="grid-posts"></div>
+</div>
+<a class="fab" id="fab">＋</a>
+<script type="module">
+import {api,toast,logout,confirmDialog,imgUrl,imageList} from './js/common.js';
+const list=document.getElementById('list'); document.getElementById('logout').onclick=logout;
+let me=null;
+async function load(){
+  me = await api('/api/profile/me').catch(()=>null);
+  if(me && me.role==='admin'){ const l=document.getElementById('adminLink'); if(l) l.style.display='inline'; }
+  const b=document.getElementById('balNav'); if(b && me) { b.textContent=(me.tokens||0)+' tk'; b.onclick=()=>location.href='topup.html'; }
+  const u=new URLSearchParams();
+  const q=document.getElementById('q').value.trim(); const t=document.getElementById('tag').value;
+  if(q) u.set('q',q); if(t) u.set('tag',t);
+  try{
+    const rows=await api('/api/posts?'+u.toString());
+    list.innerHTML = rows.map(p=>{
+      const isMine = me && (p.user_id===me.id);
+      return `
+      <div class="card post-card ${isMine?'mine':''}">
+        <img class="post-cover" src="${(imageList(p.image_url).map(imgUrl)[0]||'https://via.placeholder.com/320')}">
+        <div class="row">
+          <a class="spacer" href="post.html?id=${p.id}"><b>${p.title}</b></a>
+          ${p.promoted?'<span class="badge promo">PROMOTED</span>':''}
+        </div>
+        <div style="opacity:.8">โดย <b>${p.username}</b></div>
+        <div>${p.is_sell?('ราคา <b>'+ (p.price||0)+' ฿</b>'):'-'} ${p.is_trade?' | เทรด':''}</div>
+        <div class="row">${(p.tags||[]).map(t=>`<span class="badge">${t}</span>`).join(' ')}</div>
+        ${isMine && p.status==='approved' && !p.promoted ? '<button class="promote" data-id="'+p.id+'">โปรโมท (20 โทเคน)</button>' : ''}
+      </div>`;
+    }).join('');
+  }catch(err){ toast(err,'err'); }
+}
+document.getElementById('search').onclick=load;
+document.getElementById('fab').onclick=()=>{ if(!me) return location.href='login.html'; if((me.tokens||0) < 10){ toast('โทเคนไม่พอ กรุณาเติมโทเคน','err'); return; } location.href='create.html'; };
+
+document.addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('promote')){
+    const id=e.target.dataset.id; 
+    if(!(await confirmDialog('ยืนยันโปรโมทโพสต์นี้ (หัก 20 โทเคน)?'))) 
+    return;
+    try{ const r=await api('/api/posts/'+id+'/promote',{method:'POST'}); 
+    toast('โปรโมทแล้ว','ok'); load(); }catch(err){ toast(err,'err'); }
+  }
+});
+
+load();
+</script>
+
+<script type="module">
+import { api, qs, qsa, toast } from './js/common.js';
+(async () => {
+  const me = await api('/api/profile/me').catch(()=>null);
+  const logoutBtn = document.getElementById('logout');
+  const adminLink = document.getElementById('adminLink');
+  const bal = document.getElementById('balNav');
+  if(!me){
+    if(adminLink) adminLink.style.display='none';
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+    if(logoutBtn){
+      logoutBtn.textContent='เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick=()=>location.href='login.html';
+    }
+  }else{
+    if(bal){ bal.textContent=(me.tokens||0)+' tk'; bal.onclick=()=>location.href='topup.html'; }
+  }
+
+  // Intercept "create post" FAB if present
+  const fab = document.getElementById('fab');
+  if(fab){
+    fab.onclick = () => {
+      if(!me){ toast('กรุณา login','err'); return; }
+      if((me.tokens||0) < 10){ toast('กรุณาเติมโทเคน','err'); return; }
+      location.href='create.html';
+    };
+  }
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,25 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8"><title>ชำระเงิน</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div></div>
+<div class="container"><div class="card" id="box"></div></div>
+<script type="module">
+import {api,confirmDialog} from './js/common.js';
+const QR='./assets/qr_mock.jpg';
+const url=new URL(location.href); 
+const type=url.searchParams.get('type'); 
+const box=document.getElementById('box');
+if(type==='topup'){
+  const amount=Number(url.searchParams.get('amount')||0);
+  box.innerHTML=`<h2>ยืนยันการซื้อโทเคน</h2><div style="font-size:24px">จำนวน: <b>${amount}</b> tokens</div><img src="${QR}" style="width:260px;border-radius:12px"><br><button id="ok">ยืนยันชำระเงิน</button>`;
+  document.getElementById('ok').onclick=async()=>{ if(!(await confirmDialog('ยืนยันการชำระเงิน?'))) return; 
+  try{ await api('/api/tokens/confirm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount})}); 
+  alert('ชำระเงินสำเร็จ'); 
+  location.href='home.html'; 
+}catch(err){ alert(err.error||'error'); } };
+} else if(type==='buy'){
+  const title=decodeURIComponent(url.searchParams.get('title')||''); const price=Number(url.searchParams.get('price')||0); const postId=url.searchParams.get('postId');
+  box.innerHTML=`<h2>ยืนยันการซื้อ</h2><div>สินค้า: <b>${title}</b></div><div style="font-size:24px">ราคา: <b>${price} ฿</b></div><img src="${QR}" style="width:260px;border-radius:12px"><br><button id="ok">ยืนยันชำระเงิน</button>`;
+  document.getElementById('ok').onclick=async()=>{ if(!(await confirmDialog('ยืนยันการชำระเงิน?'))) return; try{ await api('/api/posts/'+postId+'/confirm',{method:'POST'}); alert('ชำระเงินสำเร็จ'); location.href='home.html'; }catch(err){ alert(err.error||'error'); } };
+}
+</script></body></html>

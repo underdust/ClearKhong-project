@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8">
+<title>แก้ไขโพสต์</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .thumb{width:92px;height:92px;object-fit:cover;border-radius:10px;border:1px solid #2a3344}
+  .grid{display:flex;flex-wrap:wrap;gap:10px}
+  .muted{opacity:.75;font-size:.9em}
+</style>
+</head>
+<body>
+<div class="nav">
+  <div class="brand"><i>◉</i>ClearKhong</div>
+  <div class="spacer"></div>
+  <div class="row" style="gap:10px">
+    <a href="home.html">Home</a>
+    <button id="logout" class="btn-secondary">ออกจากระบบ</button>
+  </div>
+</div>
+
+<div class="container">
+  <div class="card" style="max-width:800px;margin:0 auto">
+    <h2>แก้ไขโพสต์ <span id="statusBadge" class="badge"></span></h2>
+    <form id="postForm" enctype="multipart/form-data">
+      <label>ชื่อสินค้า</label><br>
+      <input name="title" id="title" style="width:100%" required><br><br>
+
+      <div class="row" style="gap:16px;align-items:flex-start">
+        <div style="flex:1">
+          <label>รายละเอียด</label><br>
+          <textarea name="description" id="description" rows="6" style="width:100%" required></textarea>
+        </div>
+        <div style="width:280px">
+          <label class="muted">รูปภาพปัจจุบัน</label>
+          <div id="preview" class="grid" style="margin-top:6px"></div>
+        </div>
+      </div>
+      <br>
+
+      <label><input type="checkbox" name="is_sell" id="is_sell"> ขาย</label>
+      <label><input type="checkbox" name="is_trade" id="is_trade"> เทรด</label><br><br>
+
+      <label>ราคา (ถ้าขาย)</label><br>
+      <input name="price" id="price" type="number" step="0.01"><br><br>
+
+      <div class="card">
+        <b>แท็ก</b><br>
+        <label><input type="checkbox" name="tags" value="electronics"> electronics</label>
+        <label><input type="checkbox" name="tags" value="fashion"> fashion</label>
+        <label><input type="checkbox" name="tags" value="home"> home</label>
+        <label><input type="checkbox" name="tags" value="books"> books</label>
+        <label><input type="checkbox" name="tags" value="toys"> toys</label>
+        <label><input type="checkbox" name="tags" value="sports"> sports</label>
+        <label><input type="checkbox" name="tags" value="collectibles"> collectibles</label>
+      </div><br>
+
+      <label>อัปโหลดรูปภาพใหม่ (ใส่เพื่อแทนที่/เพิ่ม)</label><br>
+      <input name="images" id="images" type="file" accept="image/*" multiple><br><br>
+
+      <div class="row">
+        <span class="spacer"></span>
+        <button type="button" id="cancel" class="btn-secondary">ยกเลิก</button>
+        <button id="save">บันทึก & ส่งตรวจใหม่</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import {api,toast,logout,imgUrl,imageList} from './js/common.js';
+document.getElementById('logout').onclick = logout;
+
+const params = new URL(location.href).searchParams;
+const id = params.get('id');
+if(!id){ location.href='home.html'; }
+
+const f = document.getElementById('postForm');
+const preview = document.getElementById('preview');
+
+let current=null;
+
+async function load(){
+  try{
+    const p = await api('/api/posts/'+id);
+    current = p;
+    const sb=document.getElementById('statusBadge'); if(sb){ sb.textContent=p.status; sb.className='badge '+(p.status==='rejected'?'err':(p.status==='pending'?'ok':'warn')); }
+    if(p.status!=='rejected'){ toast('โพสต์สถานะ '+p.status+' ไม่สามารถแก้ไขได้','err'); setTimeout(()=>location.href='profile.html',700); return; }
+    // fill fields
+    f.title.value = p.title || '';
+    f.description.value = p.description || '';
+    (document.getElementById('is_sell')).checked = !!p.is_sell;
+    (document.getElementById('is_trade')).checked = !!p.is_trade;
+    if(p.price!=null) (document.getElementById('price')).value = p.price;
+    // tags
+    const tset = new Set((p.tags||[]).map(String));
+    [...f.querySelectorAll('input[name="tags"]')].forEach(ch=> ch.checked = tset.has(ch.value));
+    // images preview
+    const pics = imageList(p.image_url).map(imgUrl);
+    preview.innerHTML = pics.length ? pics.map(u=>`<img class="thumb" src="${u}">`).join('') : '<div class="muted">ไม่มีรูปภาพ</div>';
+  }catch(err){ toast(err,'err'); }
+}
+
+f.onsubmit = async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(f);
+  try{
+    const latest = await api('/api/posts/'+id); if(latest.status !== 'rejected'){ toast('สถานะโพสต์เปลี่ยนเป็น '+latest.status+' แล้ว จึงแก้ไขไม่ได้','err'); location.href='profile.html'; return; }
+    await api('/api/posts/'+id, { method:'PUT', body: fd });
+    toast('บันทึกแล้ว และส่งอนุมัติใหม่เป็น pending','ok');
+    location.href='profile.html';
+  }catch(err){ toast(err,'err'); }
+};
+
+document.getElementById('cancel').onclick = ()=>history.back();
+
+load();
+</script>
+
+<script type="module">
+import { api, toast } from './js/common.js';
+(async () => {
+  const me = await api('/api/profile/me').catch(()=>null);
+  const logoutBtn = document.getElementById('logout');
+  const adminLink = document.getElementById('adminLink');
+  const bal = document.getElementById('balNav');
+  if(!me){
+    if(adminLink) adminLink.style.display='none';
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+    if(logoutBtn){
+      logoutBtn.textContent='เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick=()=>location.href='login.html';
+    }
+    
+    // Disable form interactions
+    const form = document.querySelector('form');
+    if(form){
+      form.querySelectorAll('input,textarea,button,select').forEach(el=>{ el.disabled=true; el.style.opacity=.6; });
+      const msg=document.createElement('div');
+      msg.className='card';
+      msg.style.marginTop='10px';
+      msg.innerHTML='<b>ต้องเข้าสู่ระบบก่อน</b><div class="muted">กรุณา login เพื่อใช้งานหน้านี้</div><button style="margin-top:8px" onclick="location.href=\'login.html\'">เข้าสู่ระบบ</button>';
+      form.parentNode.insertBefore(msg, form);
+    }
+        
+  }
+})();
+</script>
+
+</body></html>

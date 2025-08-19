@@ -1,0 +1,206 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8"><title>โพสต์</title><link rel="stylesheet" href="style.css">
+
+<style>.avatar-sm{width:28px;height:28px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;border:1px solid #ddd}</style>
+</head><body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="row"><a href="home.html">Home</a><a href="notifications.html">🔔</a><button id="logout" class="btn-secondary">ออกจากระบบ</button></div></div>
+<div class="container"><div id="box" class="card"></div>
+  <div class="card" id="comments">
+    <h3 style="margin:6px 0">ความคิดเห็น</h3>
+    <div id="cList"></div>
+    <div class="row" style="margin-top:8px"><input id="cInput" placeholder="พิมพ์คอมเมนต์..." style="flex:1"><button id="cSend">ส่ง</button></div>
+  </div>
+</div>
+
+<div id="tradeModal" class="modal-backdrop">
+  <div class="modal">
+    <h3 style="margin-top:0">เสนอเทรด</h3>
+    <input id="tDesc" placeholder="คำอธิบายข้อเสนอ" style="width:100%;margin:6px 0">
+    <input id="tImg" type="file" accept="image/*" multiple style="width:100%;margin:6px 0">
+    <div class="row" style="margin-top:10px">
+      <span class="spacer"></span>
+      <button id="tCancel" class="btn-secondary">ยกเลิก</button>
+      <button id="tSend">ยืนยัน</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import {api,avatarUrl,bust,confirmDialog,imageList,imgUrl,logout,toast} from './js/common.js';
+document.getElementById('logout').onclick=logout;
+
+function carouselHTML(urls, size='large'){
+  const cls = size==='small' ? 'carousel small' : 'carousel';
+  const first = urls && urls.length ? urls[0] : 'https://via.placeholder.com/320';
+  const data = encodeURIComponent(JSON.stringify(urls||[]));
+  return `<div class="${cls}" data-idx="0" data-images="${data}">
+    <button class="car-btn car-prev">‹</button>
+    <img class="car-img" src="${first}" style="${size==='large'?'width:320px;max-width:44vw;object-fit:cover':''}">
+    <button class="car-btn car-next">›</button>
+  </div>`;
+}
+// delegate events
+document.addEventListener('click', (e)=>{
+  const prev = e.target.closest('.car-prev'); const next = e.target.closest('.car-next');
+  if(!prev && !next) return;
+  const root = e.target.closest('.carousel');
+  if(!root) return;
+  const imgs = JSON.parse(decodeURIComponent(root.dataset.images||'[]'));
+  if(!imgs.length) return;
+  let idx = Number(root.dataset.idx||0);
+  idx = (idx + (next?1:-1) + imgs.length) % imgs.length;
+  root.dataset.idx = String(idx);
+  root.querySelector('.car-img').src = imgs[idx];
+});
+const id=new URL(location.href).searchParams.get('id'); const box=document.getElementById('box');
+
+async function load(){
+ const [p, me] = await Promise.all([ api('/api/posts/'+id), api('/api/profile/me').catch(()=>null) ]);
+ const isMine = me && (p.user_id===me.id);
+
+ box.innerHTML = `
+  <div class="row">
+    ${carouselHTML(imageList(p.image_url).map(imgUrl), "large")}
+    <div class="spacer"></div>
+    <div>
+      <h2 style="margin:0">${p.title} ${isMine?'<span class="badge">ของฉัน</span>':''}</h2>
+      <div style="opacity:.85;margin:6px 0">โดย <a href="profile.html?id=${p.author_id||p.user_id}" class="author-link"><img src="${bust(avatarUrl(p.author_profile_image_url))}" class="avatar-sm" onerror="this.onerror=null;this.src='https://www.pngall.com/wp-content/uploads/5/Profile-PNG-File.png';"> <b>${p.author_username||p.username}</b></a></div>
+      <div style="opacity:.85;margin:6px 0">${p.description||''}</div>
+      <div class="row" style="margin:6px 0">
+        <span>สถานะ:</span>
+        <span class="badge ${p.status==='approved'?'ok':(p.status==='pending'?'warn':'err')}">${p.status}</span>
+        ${p.promoted?'<span class="badge promo">PROMOTED</span>':''}
+      </div>
+      ${p.is_sell?`<div style="margin:6px 0">ราคา: <b>${p.price||0} ฿</b></div>`:''}
+      <div class="row" style="margin:6px 0">${(p.tags||[]).map(t=>`<span class="badge">${t}</span>`).join(' ')}</div>
+      <div class="row" style="margin-top:10px">
+        ${p.status==='approved' && p.is_sell && !isMine ? `<button id="buy">ซื้อทันที</button>`:''}
+        ${p.status==='approved' && p.is_trade && !isMine ? `<button id="trade" class="btn-secondary">เสนอเทรด</button>`:''}
+        ${p.status==='approved' && isMine && p.is_trade ? `<button id="closeTrade" class="btn-danger">ยืนยันเทรด (ปิดโพสต์)</button>`:''}
+        ${p.status==='approved' && isMine && !p.promoted ? `<button id="promote" class="btn-secondary">โปรโมท (20 โทเคน)</button>`:''}
+      </div>
+
+      ${p.is_trade ? `
+        <div class="card" style="margin-top:14px">
+          <div class="row"><b>ข้อเสนอเทรด</b><span class="spacer"></span><span class="badge" id="offerCount">0</span></div>
+          <div id="offers" style="margin-top:8px"></div>
+        </div>`:''}
+    </div>
+  </div>`;
+
+ // disable comments on pending/waiting
+ const cInput=document.getElementById('cInput'); const cSend=document.getElementById('cSend');
+ if(cInput && cSend && (p.status==='pending' || p.status==='waiting')){
+   cInput.disabled=true; cSend.disabled=true; cInput.placeholder='ปิดคอมเมนต์';
+ }
+ // buy
+ const buyBtn=document.getElementById('buy');
+ if(buyBtn) buyBtn.onclick=async ()=>{ if(!(await confirmDialog('ยืนยันการซื้อ?'))) return; location.href=`payment.html?type=buy&postId=${id}&title=${encodeURIComponent(p.title)}&price=${p.price||0}`; };
+
+ // promote
+ const promote=document.getElementById('promote');
+ if(promote) promote.onclick=async ()=>{ if(!(await confirmDialog('โปรโมทโพสต์นี้ (หัก 20 โทเคน)?'))) return; try{ await api('/api/posts/'+id+'/promote',{method:'POST'}); toast('โปรโมทแล้ว','ok'); load(); }catch(e){ toast(e,'err'); } };
+
+ // trade modal
+ const tradeBtn=document.getElementById('trade');
+ if(tradeBtn){
+   const modal=document.getElementById('tradeModal'); const tCancel=document.getElementById('tCancel'); const tSend=document.getElementById('tSend');
+   const tImg=document.getElementById('tImg'); const tDesc=document.getElementById('tDesc');
+   tradeBtn.onclick=()=>{ modal.classList.add('show'); tDesc.value=''; tImg.value=''; };
+   tCancel.onclick=()=>modal.classList.remove('show');
+   tSend.onclick=async()=>{
+     if(!(await confirmDialog('ยืนยันส่งข้อเสนอเทรด?'))) return;
+     const fd=new FormData();
+     for(const f of tImg.files){ fd.append('images', f); }
+     fd.append('description', tDesc.value.trim());
+     try{ await api('/api/trades/'+id,{method:'POST',body:fd}); modal.classList.remove('show'); toast('ส่งข้อเสนอเทรดแล้ว','ok'); loadOffers(me); }catch(e){ toast(e,'err'); }
+   };
+ }
+
+ // owner close trade by picking accepted offer happens in offer cards accept button
+ loadOffers(me);
+
+ // comments
+ loadComments();
+ document.getElementById('cSend').onclick=async ()=>{
+   const input=document.getElementById('cInput'); const body=input.value.trim(); if(!body) return;
+   try{ await api('/api/comments/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body})}); input.value=''; loadComments(); }catch(e){ toast(e,'err'); }
+ };
+}
+
+async function loadOffers(me){
+  try{
+    const data=await api('/api/trades/'+id);
+    document.getElementById('offerCount').textContent=data.offers.length;
+    const box=document.getElementById('offers');
+    box.innerHTML=data.offers.map(o=>`
+      <div class="offer-card">
+        ${carouselHTML(imageList(o.image_url).map(imgUrl), "small")}
+        <div class="spacer">
+          <div class="row"><b>${o.username}</b><span class="badge ${o.status==='pending'?'warn':'ok'}">${o.status}</span></div>
+          <div style="opacity:.85">${o.description||'-'}</div>
+        </div>
+        ${data.isOwner && o.status==='pending' ? `<button class="accept" data-oid="${o.id}">ยืนยัน</button>`:''}
+      </div>`).join('') || '<div style="opacity:.7">ยังไม่มีข้อเสนอ</div>';
+    document.querySelectorAll('.accept').forEach(btn=>{
+      btn.onclick=async ()=>{ if(!(await confirmDialog('ยืนยันเทรดตามข้อเสนอนี้?'))) return;
+        try{ await api('/api/trades/'+id+'/accept/'+btn.dataset.oid,{method:'POST'}); toast('เทรดสำเร็จ','ok'); location.href='home.html'; }catch(e){ toast(e,'err'); } };
+    });
+  }catch(e){ /* ignore */ }
+}
+
+async function loadComments(){
+  try{
+    const rows=await api('/api/comments/'+id);
+    document.getElementById('cList').innerHTML = rows.map(r=>`<div class="comment"><b>${r.username}</b> — <span style="opacity:.7">${new Date(r.created_at).toLocaleString()}</span><div>${r.body}</div></div>`).join('') || '<div class="comment" style="opacity:.7">ยังไม่มีความคิดเห็น</div>';
+  }catch(e){}
+}
+
+load();
+</script>
+
+<script type="module">
+import { api, toast } from './js/common.js';
+(async () => {
+  const me = await api('/api/profile/me').catch(()=>null);
+  const toLogin = ()=>toast('กรุณา login','err');
+  // Intercept buttons after the page renders
+  const ensure = (id, handler) => {
+    const el = document.getElementById(id);
+    if(el){
+      const old = el.onclick;
+      el.onclick = (e)=>{
+        if(!me){ e.preventDefault(); toLogin(); return; }
+        if(old) return old.call(el, e);
+        handler && handler(e);
+      };
+    }
+  };
+  ensure('buy');
+  ensure('trade');
+  const cSend = document.getElementById('cSend');
+  if(cSend){
+    const old = cSend.onclick;
+    cSend.onclick = (e)=>{
+      if(!me){ e.preventDefault(); toLogin(); return; }
+      if(old) old.call(cSend, e);
+    };
+  }
+
+  // Adjust nav similarly
+  const logoutBtn = document.getElementById('logout');
+  const adminLink = document.getElementById('adminLink');
+  const bal = document.getElementById('balNav');
+  if(!me){
+    if(adminLink) adminLink.style.display='none';
+    if(bal){ bal.textContent='Guest'; bal.removeAttribute('title'); bal.onclick=null; }
+    if(logoutBtn){
+      logoutBtn.textContent='เข้าสู่ระบบ';
+      logoutBtn.classList.remove('btn-secondary');
+      logoutBtn.onclick=()=>location.href='login.html';
+    }
+  }
+})();
+</script>
+
+</body></html>

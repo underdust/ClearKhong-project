@@ -1,0 +1,57 @@
+<!DOCTYPE html><html lang="th"><head>
+<meta charset="utf-8"><title>รายงานผู้ใช้</title><link rel="stylesheet" href="style.css">
+</head><body>
+<div class="nav"><div class="brand"><i>◉</i>ClearKhong</div><div class="spacer"></div><a href="index.html">Home</a><span class="spacer"></span><button id="logout" class="btn-secondary">ออกจากระบบ</button></div>
+<div class="container">
+  <div class="card">
+    <h3 style="margin-top:0">รายงานผู้ใช้</h3>
+    <div id="who" style="margin:6px 0; opacity:.85"></div>
+    <form id="form">
+      <div><b>หัวข้อรีพอร์ต</b></div>
+      <div class="row" style="flex-wrap:wrap;gap:10px;margin:8px 0">
+        <label><input type="checkbox" name="reasons" value="หลอกลวง"> หลอกลวง</label>
+        <label><input type="checkbox" name="reasons" value="ขายของผิดกฎหมาย"> ขายของผิดกฎหมาย</label>
+        <label><input type="checkbox" name="reasons" value="ภาพลามกอนาจาร"> ภาพลามกอนาจาร</label>
+        <label><input type="checkbox" name="reasons" value="สแปม"> สแปม</label>
+        <label><input type="checkbox" name="reasons" value="คำหยาบคาย/คุกคาม"> คำหยาบคาย/คุกคาม</label>
+        <label><input type="checkbox" name="reasons" value="อื่น ๆ"> อื่น ๆ</label>
+      </div>
+      <div style="margin-top:8px"><b>รายละเอียด</b></div>
+      <textarea name="details" rows="5" style="width:100%" placeholder="เล่าเหตุการณ์ รายละเอียดประกอบ..."></textarea>
+      <div style="margin-top:8px"><b>แนบรูปหลักฐาน</b> <small>(อัปได้หลายรูป)</small></div>
+      <input type="file" name="images" id="images" accept="image/*" multiple style="width:100%">
+      <div class="row" style="margin-top:12px">
+        <span class="spacer"></span>
+        <button type="submit">ส่งรีพอร์ต</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script type="module">
+import { api, toast, logout, getMe } from './js/common.js';
+document.getElementById('logout').onclick=logout;
+const params = new URL(location.href).searchParams;
+const targetId = params.get('target');
+const who = document.getElementById('who');
+(async () => {
+  const me = await getMe();
+  if(!me){ toast('กรุณาเข้าสู่ระบบก่อนส่งรีพอร์ต','err'); location.href='login.html'; return; }
+  if(!targetId){ toast('ไม่มีผู้ใช้เป้าหมาย','err'); history.back(); return; }
+  who.textContent = 'รีพอร์ตผู้ใช้ ID #' + targetId;
+})();
+
+document.getElementById('form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  fd.append('target_user_id', targetId);
+  try{
+    const res = await api('/api/reports', { method:'POST', body: fd });
+    toast('ส่งรีพอร์ตแล้ว','ok');
+    setTimeout(()=>location.href='index.html', 800);
+  }catch(err){
+    toast(err?.error || 'เกิดข้อผิดพลาด', 'err');
+  }
+});
+</script>
+</body></html>
