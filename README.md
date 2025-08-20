@@ -5,8 +5,7 @@ Backend:  http://127.0.0.1:4000
 Swagger:  http://127.0.0.1:4000/docs  
 
 ## Run
-docker compose up -d --build (first time only)  
-docker compose up -d (next time using this instead)  
+docker compose up -d
 
 ## Stop Docker
 docker compose down  
