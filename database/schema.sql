@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS posts (
   image_url TEXT,
   status post_status NOT NULL DEFAULT 'pending',
   promoted BOOLEAN NOT NULL DEFAULT FALSE,
+  promoted_at TIMESTAMP NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -132,5 +133,31 @@ BEGIN
       AND  indexname  = 'uniq_posts_user_title'
   ) THEN
     CREATE UNIQUE INDEX uniq_posts_user_title ON public.posts(user_id, title);
+  END IF;
+END $$;
+
+-- Safe migration for existing databases
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name='posts' AND column_name='promoted_at'
+  ) THEN
+    ALTER TABLE posts ADD COLUMN promoted_at TIMESTAMP NULL;
+  END IF;
+  -- Backfill for already-promoted posts without timestamp
+  UPDATE posts SET promoted_at = NOW()
+  WHERE promoted = TRUE AND promoted_at IS NULL;
+  -- Index to speed up ordering by promoted_at
+  CREATE INDEX IF NOT EXISTS idx_posts_promoted_at_desc ON posts (promoted_at DESC NULLS LAST);
+END $$;
+
+-- Enforce positive price if provided
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'chk_posts_price_positive'
+  ) THEN
+    ALTER TABLE posts
+    ADD CONSTRAINT chk_posts_price_positive
+    CHECK (price IS NULL OR price > 0);
   END IF;
 END $$;
