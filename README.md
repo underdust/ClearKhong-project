@@ -1,14 +1,15 @@
-# ClearKhong – Version A (Dockerized PostgreSQL)
-
-## Run
-docker compose build
-docker compose up -d db
-docker compose run --rm db-init
-docker compose run --rm db-seed   # optional
-docker compose up -d backend frontend
+# ClearKhong
 
 Frontend: http://127.0.0.1:8080
-Backend:  http://127.0.0.1:4000  (Swagger: /docs)
+Backend:  http://127.0.0.1:4000
+Swagger:  http://127.0.0.1:4000/docs
+
+## Run
+docker compose up -d --build (first time only)
+docker compose up -d (next time using this instead)
+
+## Stop Docker
+docker compose down
 
 ## Notes
 - DB data persists in volume `pgdata` (อย่าใช้ `docker compose down -v` หากไม่ต้องการลบข้อมูล)
